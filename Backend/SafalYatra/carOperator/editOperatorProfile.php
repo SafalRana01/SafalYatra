@@ -1,0 +1,124 @@
+<?php
+
+include "../config/connection.php";
+include "../utils/authHelper.php";
+
+
+if (!isset($_POST['token'])) {
+    echo json_encode(array(
+        "success" => false,
+        "message" => "Token is required"
+    ));
+    die();
+}
+
+$token = $_POST['token']; // Storing the token from POST request
+
+$operatorId = getOperatorId($token);
+
+if (!$operatorId) {
+    echo json_encode(array(
+        "success" => false,
+        "message" => "Invalid token"
+    ));
+    die();
+}
+
+
+if (isset($_POST['operator_name'], $_POST['contact'], $_POST['registrationNumber'], $_POST['location'])) {
+
+    $operator_name = $_POST['operator_name'];
+    $contact = $_POST['contact'];
+    $licenseNumber = $_POST['registrationNumber'];
+    $location = $_POST['location'];
+    $imageUrl = null;
+
+    if (isset($_FILES['image'])) {
+
+        $image = $_FILES['image'];
+
+        $image_size = $image['size'];
+
+        if ($image_size > 5 * 1024 * 1024) {
+            echo json_encode(array(
+                "success" => false,
+                "message" => "Image size should be less than 5 MB"
+            ));
+            die();
+        }
+
+        $ext = pathinfo($image['name'], PATHINFO_EXTENSION);
+
+        $allowed = ["jpg", "jpeg", "png", "webp"];
+
+        if (!in_array($ext, $allowed)) {
+            echo json_encode(array(
+                "success" => false,
+                "message" => "Invalid image format"
+            ));
+        }
+
+        // $new_name = uniqid() . "." . $ext;
+        // $temp_location = $image['tmp_name'];
+        // $new_location = "./images/" . $new_name;
+        // $image_url = "images/" . $new_name;
+
+        // Assuming you already have role and id from token
+        $role = 'operator'; // Since this is a driver profile update
+        $id = $operatorId;
+
+        // Get file extension
+        $ext = pathinfo($image['name'], PATHINFO_EXTENSION);
+
+        // Create unique file name: role_id_timestamp.ext
+        $new_name = $role . "_" . $id . "_" . time() . "." . $ext;
+
+        // Temporary and final locations
+        $temp_location = $image['tmp_name']; // Temporary location of the uploaded image
+        $new_location = "../images/" . $new_name; // New location for saving the image
+        $image_url = "images/" . $new_name; // URL to access the image in flutter
+
+
+        if (!move_uploaded_file($temp_location, $new_location)) {
+            echo json_encode(array(
+                "success" => false,
+                "message" => "Failed to upload image"
+            ));
+        }
+
+        $imageUrl = $image_url;
+    }
+
+    $sql = '';
+
+    if ($imageUrl == null) {
+        $sql = "UPDATE car_operators SET operator_name = '$operator_name', phone_number = '$contact', registration_number = '$licenseNumber', location = '$location' WHERE operator_id = $operatorId";
+    } else {
+        $sql = "UPDATE car_operators SET operator_name = '$operator_name', image_url='$imageUrl', phone_number = '$contact', registration_number = '$licenseNumber', location = '$location' WHERE operator_id = $operatorId";
+    }
+
+    $result = mysqli_query($connect, $sql);
+
+
+    if ($result) {
+        echo json_encode(array(
+            "success" => true,
+            "message" => "Profile updated successfully"
+        ));
+
+        die();
+    } else {
+        echo json_encode(array(
+            "success" => false,
+            "message" => "Profile updated failed"
+        ));
+
+        die();
+    }
+} else {
+    echo json_encode(array(
+        "success" => false,
+        "message" => "operator_name,contact, location and registration_number are required",
+    ));
+    die();
+}
